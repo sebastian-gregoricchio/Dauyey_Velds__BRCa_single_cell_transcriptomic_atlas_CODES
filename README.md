@@ -8,7 +8,7 @@
 ## Introduction
 Here we deposited the codes used for the the analyses performed in [Dauyey, Velds *et al.*](https://doi.org/XYZ), "A spatial single-cell transcriptomic atlas of metastatic breast cancer progression" (Journal, 202X).
 
-## Data
+## Data access
 Raw data are available at the BioImage Archive under accession number [S-BIAD2706](https://www.ebi.ac.uk/biostudies/studies/S-BIAD2706).
 
 
