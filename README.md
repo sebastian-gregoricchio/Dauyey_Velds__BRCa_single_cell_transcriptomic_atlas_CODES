@@ -27,6 +27,7 @@ Installation will take about 30 min.
 - data.table (1.18.0)
 - tidyverse
 - devtools
+- patchwork (1.3.0)
 
 
 #### Bioconductor packages
@@ -35,9 +36,11 @@ Installation will take about 30 min.
 - slingshot (2.12.0)
 - clusterProfiler (4.12.6)
 - msigdbr (25.1.1)
+- infercnv (1.22.0)
+- ComplexHeatmap (2.22.0)
 
 #### External packages
-- spacexr
+- spacexr (2.1.2)
 
 ### Installation Guide:
 For Bioconductor packages use:
