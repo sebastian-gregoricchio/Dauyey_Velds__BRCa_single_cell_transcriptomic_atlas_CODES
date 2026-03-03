@@ -20,16 +20,19 @@ Raw data are available at the BioImage Archive under accession number [S-BIAD270
 All the codes are run on R (v4.4), therefore any computer can be used to run the analyses.
 
 ## R Dependencies
+- devtools
 - Seurat
 - ggplot2 (>3.2)
 - ggalluvial
 - dplyr
 - tradeSeq
 - slingshot
+- spacexr
 
 ## Installation Guide:
 ```
 install.packages(c("ggplot2", "dplyr"))
+devtools::install_github("dmcable/spacexr", build_vignettes = FALSE)
 ```
 
 ------------------------------------------
