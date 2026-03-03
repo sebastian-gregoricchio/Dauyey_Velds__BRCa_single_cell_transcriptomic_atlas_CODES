@@ -18,18 +18,34 @@ Raw data are available at the BioImage Archive under accession number [S-BIAD270
 
 ## System Requirements
 All the codes are run on R (v4.4), therefore any computer can be used to run the analyses.
+Installation will take about 30 min.
 
-## R Dependencies
-- Seurat
+### R Dependencies
+#### CRAN packages
 - ggplot2 (>3.2)
-- ggalluvial
-- dplyr
-- tradeSeq
-- slingshot
+- dplyr (1.1.4)
+- data.table (1.18.0)
 
-## Installation Guide:
+
+#### Bioconductor packages
+- Seurat (5.3.0)
+- tradeSeq (1.18.0)
+- slingshot (2.12.0)
+- clusterProfiler (4.12.6)
+- msigdbr (25.1.1)
+
+### Installation Guide:
+For Bioconductor packages use:
 ```
-install.packages(c("ggplot2", "dplyr"))
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("package_name")
+```
+
+For CRAN packages use:
+```
+install.packages("package_name")
 ```
 
 ------------------------------------------
