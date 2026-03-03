@@ -25,6 +25,8 @@ Installation will take about 30 min.
 - ggplot2 (>3.2)
 - dplyr (1.1.4)
 - data.table (1.18.0)
+- tidyverse
+- devtools
 
 
 #### Bioconductor packages
@@ -33,6 +35,9 @@ Installation will take about 30 min.
 - slingshot (2.12.0)
 - clusterProfiler (4.12.6)
 - msigdbr (25.1.1)
+
+#### External packages
+- spacexr
 
 ### Installation Guide:
 For Bioconductor packages use:
@@ -46,6 +51,11 @@ BiocManager::install("package_name")
 For CRAN packages use:
 ```
 install.packages("package_name")
+```
+
+External packages:
+```
+devtools::install_github("dmcable/spacexr", build_vignettes = FALSE)
 ```
 
 ------------------------------------------
