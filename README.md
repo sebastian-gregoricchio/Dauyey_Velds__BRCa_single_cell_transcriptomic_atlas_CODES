@@ -13,6 +13,24 @@ Here we deposited the codes used for the the analyses performed in [Dauyey, Veld
 ## Data access
 Raw data are available at the BioImage Archive under accession number [S-BIAD2706](https://www.ebi.ac.uk/biostudies/studies/S-BIAD2706).
 
+<br>
+
+
+## System Requirements
+All the codes are run on R (v4.4), therefore any computer can be used to run the analyses.
+
+## R Dependencies
+- Seurat
+- ggplot2 (>3.2)
+- ggalluvial
+- dplyr
+- tradeSeq
+- slingshot
+
+## Installation Guide:
+```
+install.packages(c("ggplot2", "dplyr"))
+```
 
 ------------------------------------------
 
