@@ -22,11 +22,11 @@ Installation will take about 30 min.
 
 ### R Dependencies
 #### CRAN packages
-- ggplot2 (>3.2)
+- ggplot2 (>3.5)
 - dplyr (1.1.4)
 - data.table (1.18.0)
 - tidyverse
-- devtools
+- remotes
 - patchwork (1.3.0)
 
 
@@ -58,7 +58,7 @@ install.packages("package_name")
 
 External packages:
 ```
-devtools::install_github("dmcable/spacexr", build_vignettes = FALSE)
+remotes::install_github("dmcable/spacexr", build_vignettes = FALSE)
 ```
 
 ------------------------------------------
