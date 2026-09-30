@@ -51,7 +51,7 @@ colors_tissue_type <-
     "Malignant Pleural Effusion" = "purple",
     "Lymph Nodes" = "steelblue",
     "Ovarian" = "darkorange2",
-    "Myometrium" = "orange",
+    "Myometrium" = "forestgreen", #changed only for the analyses in the paper
     "Liver" = "chocolate4",
     "Neural" = "gold3",
     "Skin" = "forestgreen")
@@ -67,22 +67,22 @@ colors_cancer_cells_minor =
 
 
 # Extract slingshot smooth curves and turn into arrow segments
-add_curve_arrows = 
+add_curve_arrows =
   function(p, sce, every = 10, length_cm = 0.15, linewidth = 0.8) {
-    
+
     # Libraries
     require(Seurat)
     require(slingshot)
     require(SingleCellExperiment)
     require(ggplot2)
-    require(grid)   
-    
-    
+    require(grid)
+
+
     crvs <- slingCurves(sce)
-    
+
     list.paths <- list()
     k <- 0
-    
+
     for (nm in names(crvs)) {
       S = as.data.frame(crvs[[nm]]$s[, c("umap_1","umap_2")])     # smoothed coords
       colnames(S) <- c("x","y")
@@ -91,9 +91,9 @@ add_curve_arrows =
       S$Trajectory = nm
       list.paths[[k]] = S
     }
-    
+
     paths = do.call(rbind, list.paths)
-    
+
     # # take short segments every `every` points to avoid clutter
     # idx = seq(1, nrow(S)-1, by = every)
     # segs = data.frame(x = S$x[idx], y = S$y[idx],
@@ -117,36 +117,54 @@ add_curve_arrows =
 
 merged.ora.dotplot =
   function(named.ora.list,
+           x = "Cluster",
+           size = "GeneRatio",   # or "FoldEnrichment", "Count"
            palette = viridis::viridis(option = "mako", n = 20, direction = +1, begin = 0.3),
            title = NULL,
            subtitle = NULL) {
-    
+
     if (is.null(names(named.ora.list))) {
-      stop("The list of ORA results provided does not have names. Use `names(named.ora.list)` = c(...)`.")
+      stop("The list of ORA results provided does not have names. Use `names(named.ora.list) <- c(...)`.")
     }
-    
+
     require(ggplot2)
-    
+
     combined = clusterProfiler::merge_result(named.ora.list)
-    
-    combined_tb = as.data.frame(combined)
-    
+
     dotplot_combo =
       enrichplot::dotplot(object = combined,
-                          showCategory = 100) +
+                          showCategory = 100,
+                          x = x)
+
+    if (!size %in% colnames(dotplot_combo$data)) {
+      stop("Column '", size, "' not found in the enrichment results.")
+    }
+
+    size_name = switch(size,
+                       GeneRatio = "Gene ratio",
+                       FoldEnrichment = "Fold enrichment",
+                       size)
+
+    dotplot_combo = dotplot_combo +
+      aes(size = .data[[size]]) +
+      scale_size(range = c(3, 8), name = size_name) +
       ggtitle(label = title, subtitle = subtitle) +
-      #viridis::scale_fill_viridis(option = "mako", direction = -1, begin = 0.3) +
       scale_fill_gradientn(colours = palette, name = "P<sub>adjusted</sub>") +
-      xlab(NULL) +
+      xlab(if (x == "Cluster") NULL else x) +
       theme(plot.title = ggtext::element_markdown(hjust = 0.5),
             plot.subtitle = ggtext::element_markdown(hjust = 0.5),
             legend.title = ggtext::element_markdown(),
             axis.ticks.y = element_blank()) +
-      geom_text(data = combined_tb %>% mutate(Cluster_n = paste0(Cluster, "\n(", gsub(".*[/]", "", GeneRatio), ")")),
-                aes(y = Description, x = Cluster_n,
-                    label = Count),
+      geom_text(aes(x = .data[[x]], y = Description, label = Count),
                 inherit.aes = FALSE)
-    
+
+    # only used when x is numeric (e.g. x = "FoldEnrichment")
+    if (x != "Cluster") {
+      dotplot_combo = dotplot_combo + facet_grid(~ Cluster)
+    } else {
+      dotplot_combo = dotplot_combo + theme(axis.ticks.x = element_blank())
+    }
+
     return(dotplot_combo)
   }
 
@@ -155,25 +173,28 @@ merged.ora.dotplot =
 
 
 # Load the full table of the xenium
-xenium <- readRDS(file = "./xenium_all_TMAs_combined.Rds")
+xenium <- SeuratObject::UpdateSeuratObject(readRDS(file = "./xenium_all_TMAs_combined.Rds"))
 
-xenium_pat <- subset(xenium, subset = M.nr == patient_id & Major_cell_annotation == "Cancer Epithelial" & grepl("Cancer", Minor_cell_annotation))
 
-## Remove genes with score 0 for all cells and reloading data
-cancer_pat_counts = Seurat::GetAssay(xenium_pat, assay = "Xenium")$counts
-cancer_pat_counts = cancer_pat_counts[rowSums(cancer_pat_counts) > 0,]
+# Filter patient of interest and Cancer cells only
+meta <- xenium[[]]
 
-xenium_pat =
-  Seurat::CreateSeuratObject(counts = cancer_pat_counts,
-                             meta.data = xenium_pat@meta.data,
-                             project = "Xenium",
-                             assay = gsub("-", "", paste0(patient_id, "_cancer")))
+is_minor_cancer <- grepl("Cancer", meta$Minor_cell_annotation)
+is_major_cancer <- meta$Major_cell_annotation %in% "Cancer Epithelial"
+is_patient_selected <- meta$M.nr == patient_id
 
-xenium_pat = Seurat::NormalizeData(object = xenium_pat)
-xenium_pat = Seurat::ScaleData(object = xenium_pat)
-xenium_pat = Seurat::FindVariableFeatures(object = xenium_pat)
-xenium_pat = Seurat::RunPCA(object = xenium_pat)
-xenium_pat = Seurat::RunUMAP(object = xenium_pat, reduction = "pca", dims = 1:50)
+keep <- is_minor_cancer & is_major_cancer & is_patient_selected
+
+xenium_pat <- subset(xenium, cells = rownames(meta)[keep])
+
+
+## Re-run dimensional reduction
+xenium_pat <- ScaleData(xenium_pat)
+xenium_pat <- RunPCA(xenium_pat, npcs = 50)
+
+xenium_pat <- FindNeighbors(xenium_pat, dims = 1:50, k.param = 16)
+xenium_pat <- FindClusters(xenium_pat, resolution = 0.5)
+xenium_pat <- RunUMAP(xenium_pat, reduction = "pca", dims = 1:50)
 
 
 
@@ -187,8 +208,8 @@ xenium_pat <- FindClusters(xenium_pat, resolution = clust.resolution, random.see
 ## Compute trajectories
 sce <- as.SingleCellExperiment(xenium_pat)
 sce <- slingshot(data = sce,
-                 dist.method = 'mnn', 
-                 clusterLabels = paste0(gsub("-","", patient_id), "_cancer_snn_res.",clust.resolution),
+                 dist.method = 'mnn',
+                 clusterLabels = paste0("Xenium_snn_res.",clust.resolution),
                  reducedDim = 'UMAP',
                  # start.clus = "0", # if the start is known
                  # end.clus = "4",  # if the end is known
@@ -201,7 +222,11 @@ xenium_pat$pseudotime <- slingPseudotime(sce)[,1]
 
 ## Make some general UMAPs
 umap_tissue_origin <-
-  Seurat::DimPlot(xenium_pat, group.by = "Tissue_type", raster=T, raster.dpi = c(800,800), pt.size = pt.size) + # geom_scattermore() for rasterization
+  Seurat::DimPlot(xenium_pat,
+                  group.by = "Tissue_type",
+                  raster=T,
+                  raster.dpi = c(800,800),
+                  pt.size = pt.size) + # geom_scattermore() for rasterization
   xlab("UMAP1") +
   ylab("UMAP2") +
   scale_color_manual(values = colors_tissue_type,
@@ -212,7 +237,11 @@ umap_tissue_origin <-
 
 
 umap_cell_types_minor <-
-  Seurat::DimPlot(xenium_pat, group.by = "Minor_cell_annotation", raster=T, raster.dpi = c(800,800), pt.size = pt.size) + # geom_scattermore() for rasterization
+  Seurat::DimPlot(xenium_pat,
+                  group.by = "Minor_cell_annotation",
+                  raster=T,
+                  raster.dpi = c(800,800),
+                  pt.size = pt.size) + # geom_scattermore() for rasterization
   xlab("UMAP1") +
   ylab("UMAP2") +
   scale_color_manual(values = colors_cancer_cells_minor,
@@ -223,7 +252,11 @@ umap_cell_types_minor <-
 
 
 umap_sample_type <-
-  Seurat::DimPlot(xenium_pat, group.by = "Donor.Block.ID", raster=T, raster.dpi = c(800,800), pt.size = pt.size) + # geom_scattermore() for rasterization
+  Seurat::DimPlot(xenium_pat,
+                  group.by = "Donor.Block.ID",
+                  raster=T,
+                  raster.dpi = c(800,800),
+                  pt.size = pt.size) + # geom_scattermore() for rasterization
   xlab("UMAP1") +
   ylab("UMAP2") +
   ggtitle(label = paste0("**", patient_id, " Cancer cells | sample date**"),
@@ -233,10 +266,14 @@ umap_sample_type <-
 
 ## UMAP of Seurat clusters with trajectories
 umap_seurat_clusters <-
-  Seurat::DimPlot(xenium_pat, group.by = paste0(gsub("-","",patient_id),"_cancer_snn_res.",clust.resolution), raster=T, raster.dpi = c(800,800), pt.size = pt.size) +
-  ggtitle( paste0("**", patient_id, " | slingshot pseudotime trajectories**")) +
-  scale_color_manual(values = rainbow(length(unique(xenium_pat@meta.data[,paste0(gsub("-","",patient_id),"_cancer_snn_res.",clust.resolution)]))),
-                     breaks = 0:(length(unique(xenium_pat@meta.data[,paste0(gsub("-","",patient_id),"_cancer_snn_res.",clust.resolution)]))-1)) +
+  Seurat::DimPlot(xenium_pat,
+                  group.by = paste0("Xenium_snn_res.",clust.resolution),
+                  raster=T,
+                  raster.dpi = c(800,800),
+                  pt.size = pt.size) +
+  ggtitle(paste0("**", patient_id, " | slingshot pseudotime trajectories**")) +
+  scale_color_manual(values = rainbow(length(unique(xenium_pat@meta.data[,paste0("Xenium_snn_res.",clust.resolution)]))),
+                     breaks = 0:(length(unique(xenium_pat@meta.data[,paste0("Xenium_snn_res.",clust.resolution)]))-1)) +
   umap_theme
 
 
@@ -273,7 +310,7 @@ pt2[is.na(pt2)] <- 0
 # Defining multi-core parameters
 set.seed(42)
 BPPARAM <- BiocParallel::bpparam()
-BPPARAM$workers = 15 # use 15 cores
+BPPARAM$workers = 24 # use 15 cores
 
 # general additive model fitting (-- it takes some time --)
 gam <- tradeSeq::fitGAM(counts = counts[, keep],
@@ -302,18 +339,18 @@ k=0
 
 for (i in 1:length(grep("pvalue_",colnames(assoc)))) {
   k = k+1
-  
+
   pval_lin = assoc[,colnames(assoc) == paste0("pvalue_",i), drop = F]
   pval_lin$gene = rownames(pval_lin)
   pval_lin$padj = p.adjust(pval_lin[,1], method = "BH")
-  
+
   lin_genes =
     data.frame(gene = pval_lin$gene,
                pvalue = pval_lin[,1],
                padj_BH = pval_lin$padj,
                lineage = i) %>%
     dplyr::mutate(signif = padj_BH < 0.01)
-  
+
   if (nrow(lin_genes) > 0) {list_lineage_association[[k]] = lin_genes}
 }
 
@@ -325,13 +362,10 @@ if (length(list_lineage_association) > 1) {
 
 
 # Extract predicted "expression" smooth for associated genes
-genes_smooth_list <- purrr::map(.x = globally_sig,
-                               .f = function(x){
-                                 tradeSeq::predictSmooth(models = gam, gene = x) %>%
-                                   dplyr::mutate(gene = x)},
-                               .progress = TRUE)
-
-genes_smooth_combo <- do.call(rbind, genes_smooth_list)
+genes_smooth_combo <- tradeSeq::predictSmooth(models = gam,
+                                              gene = globally_sig,
+                                              nPoints = 100,
+                                              tidy = TRUE)
 
 genes_smooth_combo_assoc <-
   dplyr::left_join(x = genes_smooth_combo,
@@ -357,7 +391,7 @@ n.top.genes <- 50
 top_genes_lineage <- list()
 
 for (i in 1:length(unique(effect_tb$lineage))) {
-  top_genes_lineage[[i]] <- 
+  top_genes_lineage[[i]] <-
     (effect_tb %>%
        dplyr::filter(lineage == i,
                      padj_BH < 0.05))$gene[1:n.top.genes]
@@ -376,7 +410,7 @@ top_genes_unique <- unique(c(unlist(top_genes_lineage, use.names = FALSE)))
 
 
 ## Plot the top genes expression (fitted) pattern per each trajectory
-pattern_lines_top_genes <- 
+pattern_lines_top_genes <-
   ggplot(data = genes_smooth_combo_assoc,
          aes(x = time,
              y = yhat,
@@ -398,11 +432,13 @@ signatures_li <-
   msigdbr::msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CGP") %>%
   dplyr::filter(grepl("^LI_ESTROGENE", gs_name))
 
+all_signatures = rbind(hallamrks, signatures_li)
 
-## Filter for Xenium 5001 genes panel
+
+## Load the Xenium 5001 genes panel to use as universe for the enrichments
 ### The list of 5001 genes can be downloaded here --> https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://cdn.10xgenomics.com/raw/upload/v1715726653/software-support/Xenium-panels/5K_panel_files/XeniumPrimeHuman5Kpan_tissue_pathways_metadata.csv&ved=2ahUKEwi0rcr0iuiSAxX09gIHHeu-AoAQFnoECAwQAQ&usg=AOvVaw13J94Jx8EhTHZmh4Gj2eSH
 fivek_panel = read.csv("./XeniumPrimeHuman5Kpan_tissue_pathways_metadata.csv")[,1]
-all_signatures = all_signatures %>% dplyr::filter(gene_symbol %in% fivek_panel)
+
 
 
 ## Perform ORA
@@ -410,24 +446,19 @@ ora_top_genes_lineage <-
   purrr::map(.x = 1:length(unique(effect_tb$lineage)),
              .f = function(x){
                clusterProfiler::enricher(gene = top_genes_lineage[[x]],
-                                         pvalueCutoff = 0.01,
+                                         pvalueCutoff = 0.05,
                                          pAdjustMethod = "BH",
-                                         qvalueCutoff = 0.01,
+                                         qvalueCutoff = 0.05,
+                                         universe = fivek_panel,
                                          TERM2GENE = all_signatures %>% dplyr::select(gs_name, gene_symbol))
              })
 names(ora_top_genes_lineage) <- paste0("Trajectory ", 1:length(unique(effect_tb$lineage)))
 
 
 # Plot combined results
-dotplot.ora_top_genes <- merged.ora.dotplot(ora_top_genes_lineage)
+dotplot.ora_top_genes <- merged.ora.dotplot(ora_top_genes_lineage, x = "Cluster", size = "GeneRatio")
 
 
 
 ## Combine plots
-patchwork::wrap_plots(umap_trajectories, pattern_lines_top_genes, dotplot.ora_top_genes, nrow = 1)
-
-
-
-
-
-
+patchwork::wrap_plots(umap_trajectories, pattern_lines_top_genes, dotplot.ora_top_genes, nrow = 1, widths = c(1,1,0.5))
